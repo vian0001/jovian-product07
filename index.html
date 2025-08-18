@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menavigasi Antarmuka Winbox dan CLI pada MikroTik</title>
+    <style>
+        /* RESET DAN FONT BASE */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* VARIABEL WARNA */
+        :root {
+            --primary: #0066cc;
+            --secondary: #00aaff;
+            --accent: #00ff9d;
+            --dark: #001a33;
+            --light: #f0f8ff;
+            --code-bg: #0a192f;
+            --header-gradient: linear-gradient(135deg, #0a1a2f 0%, #0f2847 100%);
+        }
+
+        /* LOADING SCREEN */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #020915;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .loading-container {
+            position: relative;
+            width: 250px;
+            height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-circle {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 4px solid transparent;
+            border-top-color: var(--accent);
+            animation: spin 2s linear infinite;
+        }
+
+        .loading-circle:nth-child(2) {
+            width: 80%;
+            height: 80%;
+            border-top-color: var(--secondary);
+            animation-duration: 1.5s;
+            animation-direction: reverse;
+        }
+
+        .loading-circle:nth-child(3) {
+            width: 60%;
+            height: 60%;
+            border-top-color: var(--primary);
+            animation-duration: 1s;
+        }
+
+        .loading-logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--light);
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 170, 255, 0.7);
+            background-image: linear-gradient(45deg, var(--accent), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: pulse 1.5s ease-in-out infinite alternate;
+        }
+
+        .loading-progress {
+            width: 250px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            margin-top: 20px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .loading-progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            transition: width 0.05s linear;
+        }
+
+        .loading-text {
+            margin-top: 15px;
+            color: var(--light);
+            font-size: 14px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .loading-counter {
+            margin-top: 10px;
+            font-size: 24px;
+            color: var(--secondary);
+            font-weight: bold;
+        }
+
+        .loading-dots {
+            display: inline-block;
+            width: 30px;
+            text-align: left;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.7;
+                transform: scale(0.95);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1.05);
+            }
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                visibility: hidden;
+            }
+        }
+
+        /* BACKGROUND TEKNOLOGI */
+        body {
+            background-color: #090b10;
+            background-image:
+                radial-gradient(circle at 25% 15%, rgba(0, 102, 255, 0.1) 0%, transparent 40%),
+                radial-gradient(circle at 75% 85%, rgba(0, 255, 153, 0.1) 0%, transparent 40%),
+                linear-gradient(90deg, rgba(1, 9, 30, 0.8) 0%, rgba(1, 6, 20, 0.8) 100%);
+            color: var(--light);
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* MAIN CONTENT HIDDEN INITIALLY */
+        .main-content {
+            display: none;
+        }
+
+        /* GRID OVERLAY EFFECT */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(0, 20, 40, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 20, 40, 0.1) 1px, transparent 1px);
+            background-size: 30px 30px;
+            z-index: -1;
+            pointer-events: none;
+            animation: gridMove 60s linear infinite;
+        }
+
+        /* FLOATING NODES EFFECT */
+        .node {
+            position: fixed;
+            width: 4px;
+            height: 4px;
+            background: var(--accent);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0.6;
+            z-index: -1;
+        }
+
+        /* CONTAINER STYLING */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+            animation: fadeIn 1s ease-in-out;
+            overflow: hidden;
+        }
+
+        /* HEADER STYLING */
+        header {
+            padding: 2rem 0;
+            text-align: center;
+            margin-bottom: 2rem;
+            background: var(--header-gradient);
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            transform-style: preserve-3d;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::after {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                rgba(255, 255, 255, 0.1),
+                rgba(255, 255, 255, 0.05)
+            );
+            transform: rotate(30deg);
+            animation: headerShine 5s infinite;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
+            text-shadow: 0 0 10px rgba(0, 255, 157, 0.5);
+        }
+
+        /* AUTHOR INFO */
+        .author-info {
+            background: rgba(0, 26, 51, 0.7);
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem auto;
+            max-width: 500px;
+            border-left: 4px solid var(--accent);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            animation: slideIn 1s ease-in-out;
+        }
+
+        .author-info p {
+            margin: 0.3rem 0;
+            font-size: 0.9rem;
+        }
+
+        /* SECTION STYLING */
+        section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: rgba(1, 15, 30, 0.7);
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transform: translateY(30px);
+            opacity: 0;
+            transition: all 0.5s ease-in-out;
+        }
+
+        section.visible {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        section:hover {
+            transform: translateY(-5px) scale(1.01);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            background: rgba(1, 20, 40, 0.8);
+        }
+
+        h2 {
+            color: var(--secondary);
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--secondary);
+            padding-bottom: 0.5rem;
+            font-size: 1.8rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            text-align: justify;
+        }
+
+        /* CODE BLOCK STYLING */
+        .code-block {
+            background: var(--code-bg);
+            padding: 1rem;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: 'Courier New', Courier, monospace;
+            border-left: 3px solid var(--accent);
+            position: relative;
+        }
+
+        .code-block:hover {
+            box-shadow: 0 0 15px rgba(0, 255, 157, 0.3);
+        }
+
+        .code-block::before {
+            content: "CLI Command";
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            background: var(--accent);
+            color: var(--dark);
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+
+        /* REFERENCE STYLING */
+        .references {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 2px solid var(--primary);
+        }
+
+        .references h2 {
+            color: var(--accent);
+        }
+
+        .references ol {
+            padding-left: 1.5rem;
+        }
+
+        .references li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* FOOTER STYLING */
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 3rem;
+            background: rgba(0, 10, 20, 0.7);
+            border-radius: 10px;
+            animation: fadeIn 1s ease-in-out 1.5s backwards;
+        }
+
+        /* ANIMATIONS */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes headerShine {
+            0% {
+                top: -100%;
+                left: -100%;
+            }
+            20%, 100% {
+                top: 100%;
+                left: 100%;
+            }
+        }
+
+        @keyframes gridMove {
+            0% {
+                background-position: 0 0;
+            }
+            100% {
+                background-position: 30px 30px;
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        /* SCROLLBAR STYLING */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--secondary);
+        }
+
+        /* IMAGE CONTAINER STYLING */
+        .image-container {
+            text-align: center;
+            margin: 2rem auto;
+            max-width: 100%;
+            background-color: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .responsive-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: block;
+            margin: 0 auto;
+        }
+
+        .image-caption {
+            font-style: italic;
+            color: #666;
+            margin: 1rem 0 0.5rem;
+        }
+
+        .image-source {
+            font-size: 0.9rem;
+            color: #888;
+            margin: 0.5rem 0;
+        }
+
+        /* RESPONSIVE DESIGN */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+
+            section {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen">
+        <div class="loading-container">
+            <div class="loading-circle"></div>
+            <div class="loading-circle"></div>
+            <div class="loading-circle"></div>
+            <div class="loading-logo">MIKROTIK NAVIGATOR</div>
+        </div>
+        <div class="loading-progress">
+            <div class="loading-progress-bar"></div>
+        </div>
+        <div class="loading-text">Menyiapkan antarmuka <span class="loading-dots">...</span></div>
+        <div class="loading-counter">hello</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="container">
+            <header>
+                <h1>MENAVIGASI ANTARMUKA WINBOX DAN CLI PADA MIKROTIK</h1>
+                <div class="author-info">
+                    <p>Nama Penulis: Jovian Ekasakta</p>
+                    <p>Guru: Arief Wahyudin</p>
+                    <p>Kelas: XI TJKT 03</p>
+                    <p>Sekolah: Dwija Bhakti 01 Jombang</p>
+
+                    <!-- Alternatif button yang lebih sederhana -->
+    <div style="text-align: center; margin: 40px 0;">
+        <h3 style="color: rgb(11, 81, 243); margin-bottom: 20px;">click more information of me</h3>
+        <a href="https://jovian-portofolio02.vercel.app/" 
+           target="_blank" 
+           style="background: #6366f1; color: white; padding: 10px 20px; border-radius: 20px; text-decoration: none; display: inline-block; font-weight: 600; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); transition: all 0.3s ease;"
+           onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(99, 102, 241, 0.4)'"
+           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(99, 102, 241, 0.3)'">
+            🌟 My Portfolio
+        </a>
+    </div>
+
+                </div>
+            </header>
+
+            <section id="section1">
+                <h2>1. PENGENALAN ANTARMUKA WINBOX</h2>
+                <p>Dari sumber IDN.ID (2022), Winbox adalah sebuah aplikasi berbasis windows yang biasa digunakan untuk konfigurasi mikrotik. Dari sumber yang sama, setelah berhasil login ke Winbox, kita dapat melihat beberapa tampilan seperti "title bar", Session, Settings, Dashboard, Undo, Redo, dan Safe Mode. Kita juga dapat mengubah identitas router dengan masuk ke menu System – Identity. Dashboard akan menampilkan beberapa menu untuk monitoring seperti CPU Usage, Memory, Time, dan Date.</p>
+                <p>Dari sumber Biznethome (2025), Winbox adalah aplikasi berbasis Windows yang memungkinkan konfigurasi MikroTik secara grafis melalui GUI (Graphical User Interface). Untuk mengunduh Winbox, pengguna bisa mengakses situs resmi MikroTik: https://mikrotik.com/download dan cukup membuka file Winbox.exe yang telah diunduh tanpa perlu instalasi karena merupakan aplikasi portable.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa Winbox adalah aplikasi berbasis Windows yang menyediakan antarmuka grafis (GUI) untuk melakukan konfigurasi MikroTik dengan lebih mudah dan dapat diunduh langsung dari situs resmi MikroTik.</p>
+            </section>
+
+            <section id="section2">
+                <h2>2. MENU UTAMA PADA WINBOX</h2>
+                <p>Dari sumber Biznethome (2025), setelah berhasil login ke Winbox, pengguna akan melihat beberapa menu utama seperti Interfaces yang menampilkan daftar port ethernet yang tersedia, IP yang berisi pengaturan IP Address, DHCP, Firewall, NAT, dan lainnya, serta Bridge yang digunakan untuk menghubungkan beberapa interface agar berfungsi seperti satu jaringan.</p>
+                <p>Dari sumber IDN.ID (2022), Winbox memiliki menu-menu penting seperti Bridge untuk menggabungkan port di mikrotik menjadi 1 jaringan, Switch untuk konfigurasi VLAN dan Port Isolation, Mesh untuk konfigurasi HWMP+ pada wireless mesh, IP untuk konfigurasi IP Address, DHCP, Firewall, DNS, Hotspot, IPSec, Routes, dan Web Proxy. Menu Routing digunakan untuk konfigurasi Dynamic Routing Protocol seperti RIP, OSPF, BGP. Menu System digunakan untuk Reset Configuration, Packages, Reboot, dan lainnya. Menu Queues digunakan untuk konfigurasi Bandwidth Management.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa Winbox menyediakan berbagai menu utama yang memungkinkan pengguna mengakses semua fitur MikroTik seperti pengaturan interface, IP, routing, bandwidth management, dan banyak fitur lainnya melalui antarmuka grafis yang terstruktur.</p>
+            </section>
+
+            <section id="section3">
+                <h2>3. NAVIGASI DASAR PADA WINBOX</h2>
+                <p>Dari sumber Citraweb (tanpa tahun), penggunaan Winbox harian untuk konfigurasi Router Mikrotik sebaiknya menggunakan IP-Address karena akan lebih stabil dengan protocol TCP. Dari sumber yang sama, Mikrotik bisa diremote menggunakan MAC-Address maupun IP-Address. Remote MAC-Address sebaiknya digunakan saat awal melakukan konfigurasi sebelum Router memiliki IP Address saja.</p>
+                <p>Dari sumber Biznethome (2025), untuk mengakses perangkat MikroTik, pengguna perlu menyambungkan MikroTik ke PC menggunakan kabel LAN, membuka Winbox, dan memilih tab Neighbors untuk mendeteksi perangkat MikroTik yang tersedia. Kemudian pilih perangkat dengan MAC Address yang terdeteksi, masukkan Username (default: admin) dan kosongkan Password (default tidak ada password), dan klik Connect untuk masuk ke antarmuka konfigurasi MikroTik.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa untuk navigasi dasar pada Winbox, pengguna dapat mengakses router MikroTik melalui MAC Address (saat awal konfigurasi) atau IP Address (untuk penggunaan harian yang lebih stabil), dengan proses koneksi yang sederhana melalui tab Neighbors di Winbox.</p>
+            </section>
+
+            <section id="section4">
+                <h2>4. FITUR-FITUR PENTING PADA WINBOX</h2>
+                <p>Dari sumber Citraweb (tanpa tahun), untuk meminimalkan kesalahan konfigurasi, pengguna dapat menggunakan tombol "Safe Mode". Pada saat Safe mode diaktifkan, konfigurasi yang dilakukan tidak akan langsung diterapkan secara permanen. Dari sumber yang sama, Dashboard winbox bisa digunakan untuk menampilkan beberapa informasi yaitu Time, Date, CPU load, memory, dan Uptime. Informasi yang ditampilkan merupakan informasi real time. CPU menunjukkan penggunaan CPU Router, Memory menunjukkan sisa RAM yang ada di router, dan Uptime menunjukkan lama waktu Router sudah aktif. Dengan adanya informasi yang tertampil langsung di dashboard akan lebih memudahkan monitoring Router saat melakukan remote winbox.</p>
+                <p>Dari sumber Citraweb (tanpa tahun), untuk mengupload maupun download file ke router, dengan Winbox versi baru sudah tersedia tombol upload jika ingin menambahkan file ke dalam router. Untuk mengambil file dari Router, bisa dilakukan dengan memilih file kemudian klik kanan download. Dari sumber yang sama, Winbox Loader juga dapat melakukan penyimpanan data remote Router baik untuk IP Address, Username maupun Password dengan menekan tombol Add/Set sebelum klik tombol Connect. Informasi Router akan tersimpan pada tab Managed dan untuk melakukan remote ulang, tinggal double click pada list Router yang diinginkan. Untuk memindahkan data ke laptop/PC lain, pengguna bisa melakukan export import untuk list yang sudah ada di winbox loader sebelumnya.</p>
+                <p>Dari beberapa pendapat tersebut dapat disimpulkan bahwa Winbox menyediakan fitur-fitur penting seperti Safe Mode untuk mencegah kesalahan konfigurasi, Dashboard untuk monitoring real-time, fitur upload/download file, dan kemampuan menyimpan informasi router untuk memudahkan koneksi di masa mendatang.</p>
+            </section>
+
+            <section id="section5">
+                <h2>5. PENGENALAN COMMAND LINE INTERFACE (CLI) MIKROTIK</h2>
+                <p>Dari sumber Nevacloud (2024), CLI (Command Line Interface) MikroTik adalah sebuah antarmuka berbasis teks yang digunakan untuk mengonfigurasi perangkat MikroTik, termasuk router dan switch. Melalui CLI, pengguna dapat menjalankan perintah-perintah khusus untuk mengatur dan memodifikasi konfigurasi perangkat secara manual, yang berguna untuk pengaturan dengan tingkat detail dan kustomisasi tinggi. CLI menyediakan kontrol lebih detail atas konfigurasi perangkat dan memungkinkan automatisasi tugas-tugas rutin melalui skrip untuk menghemat waktu dan mengurangi kemungkinan kesalahan manusia.</p>
+                <p>Dari sumber PCNetLabs (2020), untuk mengkonfigurasi Mikrotik Router ada beberapa cara termasuk melalui perintah CLI atau Command Line Interface. Mengkonfigurasi Mikrotik dengan mengetikkan perintah CLI memang lebih menantang daripada lewat Winbox atau browser karena minimal pengguna harus mengetahui logika atau susunan baris perintahnya. Namun, mengkonfigurasi Mikrotik menggunakan CLI mempunyai beberapa kelebihan, seperti kemampuan untuk mengakses Mikrotik melalui telnet, ssh, kabel serial, menu terminal pada winbox, atau secara langsung.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa CLI MikroTik adalah antarmuka berbasis teks yang menawarkan kontrol lebih detail dan kemampuan otomatisasi, meskipun membutuhkan pemahaman logika perintah yang lebih dalam dibandingkan dengan menggunakan Winbox.</p>
+            </section>
+
+            <section id="section6">
+                <h2>6. NAVIGASI DASAR PADA CLI MIKROTIK</h2>
+                <p>Dari sumber Labkom.co.id (tanpa tahun), pada dasarnya mikrotik adalah router berbasis Linux sehingga tampilan mikrotik berupa hitam-putih dengan mode teks. Untuk melihat induk perintah mikrotik tekan saja tab atau tanda tanya "?". Mikrotik mempunyai fitur Command Line Completion sehingga pengguna cukup mengetik 3-5 huruf lalu tekan tab, misalnya untuk mengetikkan "interfaces" cukup ketik "int" lalu tab. Penggunaan tab dan "?" juga bisa digunakan untuk melihat perintah selanjutnya setelah mengetikan sebuah perintah.</p>
+                <p>Dari sumber Blues Pedia (tanpa tahun), pada dasarnya mikrotik adalah router berbasis Linux sehingga tampilannya hitam-putih dengan mode teks. Untuk melihat induk perintah mikrotik tekan saja tab atau tanda tanya "?". Fitur Command Line Completion memungkinkan pengguna cukup mengetik 3-5 huruf lalu tekan tab untuk melengkapi perintah. Penggunaan tab dan "?" juga bisa digunakan untuk melihat perintah selanjutnya setelah mengetikan sebuah perintah.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa navigasi dasar pada CLI MikroTik memanfaatkan fitur Command Line Completion dengan tombol Tab dan tanda tanya "?" untuk memudahkan pengguna dalam mengetikkan dan melihat perintah-perintah yang tersedia.</p>
+            </section>
+
+            <section id="section7">
+                <h2>7. PERINTAH DASAR CLI MIKROTIK</h2>
+                <p>Dari sumber Nevacloud (2024), beberapa perintah dasar yang sering digunakan dalam CLI MikroTik dan fungsinya adalah "/interface print" untuk menampilkan daftar semua interface dan "/ip address add" untuk menambahkan alamat IP ke sebuah interface.</p>
+                <p>Dari sumber Blues Pedia (tanpa tahun), beberapa perintah dasar CLI MikroTik yang sering digunakan antara lain: 1) "add" untuk menambahkan properties (contoh: # ip address add address=192.168.1.1/24 interfaces=ether1), 2) "comment" untuk memberi komentar sebagai keterangan, 3) "disable" untuk menonaktifkan service (contoh: # ip address disable 0), 4) "enable" untuk mengaktifkan service (contoh: # ip address enable 0), 5) "edit" untuk mengubah/edit sebuah file/properties (contoh: # ip address edit 0 comment).</p>
+                <p>Dari sumber Komputer Jaringan (tanpa tahun), beberapa perintah dasar mikrotik lainnya meliputi: 1) Perintah untuk mengganti hostname pada Router MikroTik, 2) Perintah untuk melihat identitas yang sudah dikonfigurasi, 3) Perintah untuk mematikan Router MikroTik, 4) Perintah untuk merestart Router MikroTik, 5) Perintah untuk melakukan reset konfigurasi pada router, 6) Perintah untuk menyimpan data agar jika konfigurasi terhapus dapat mengambil data yang telah dibackup/disimpan sebelumnya, 7) Perintah untuk melihat paket yang telah terinstall pada Router Mikrotik.</p>
+                <p>Dari 3 pendapat tersebut dapat disimpulkan bahwa CLI MikroTik memiliki berbagai perintah dasar yang memungkinkan pengguna untuk mengkonfigurasi dan mengelola router, seperti menampilkan interface, menambahkan alamat IP, mengaktifkan/menonaktifkan service, mengedit properties, mengganti hostname, merestart router, dan melakukan backup konfigurasi.</p>
+            </section>
+
+            <section id="section8">
+                <h2>8. KONFIGURASI IP ADDRESS MELALUI CLI</h2>
+                                                                <div class="image-container">
+                    <img src="g:\web\product 07\8.jpeg" alt="Deskripsi gambar" class="responsive-image">
+                    <p class="image-caption">Picture BY Jovian</p>
+                </div>
+
+                <p>Dari sumber Herza Cloud (2020), untuk menginput IP pada MikroTik melalui CLI, pengguna dapat menggunakan perintah "/ip address add address=192.168.1.10/24 interface=ether1" untuk menambahkan alamat IP dan "/ip route add gateway=192.168.1.1" untuk menambahkan gateway.</p>
+                <p>Dari sumber Nevacloud (2024), salah satu langkah pertama dalam konfigurasi jaringan adalah menetapkan alamat IP untuk interface pada router dengan perintah "/ip address add address=192.168.88.1/24 interface=ether1". Ini menetapkan alamat IP 192.168.88.1 dengan subnet mask 255.255.255.0 ke interface ether1.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa konfigurasi IP address melalui CLI MikroTik dilakukan dengan perintah "/ip address add" yang memungkinkan pengguna untuk menentukan alamat IP, subnet mask, dan interface yang akan digunakan, serta "/ip route add" untuk mengatur gateway.</p>
+                <div class="code-block">
+                    /ip address add address=192.168.1.10/24 interface=ether1
+                    /ip route add gateway=192.168.1.1
+                </div>
+            </section>
+
+            <section id="section9">
+                <h2>9. KONFIGURASI ROUTING MELALUI CLI</h2>
+
+                                                                <div class="image-container">
+                    <img src="g:\web\product 07\9.jpeg" alt="Deskripsi gambar" class="responsive-image">
+                    <p class="image-caption">Picture BY Jovian</p>
+                </div>
+
+
+                <p>Dari sumber Nevacloud (2024), routing adalah proses mengatur lalu lintas jaringan ke tujuan yang benar. Untuk mengatur routing dasar pada MikroTik, pengguna dapat menambahkan route statis dengan perintah "/ip route add dst-address=0.0.0.0/0 gateway=192.168.88.1". Ini adalah contoh menambahkan default gateway, yang akan digunakan untuk mengarahkan lalu lintas ke internet atau jaringan lain.</p>
+                <p>Dari sumber Herza Cloud (2020), setelah menambahkan alamat IP ke interface, pengguna perlu menambahkan route agar dapat terhubung ke internet dengan perintah "/ip route add gateway=192.168.1.1", lalu memeriksa konfigurasi dengan "/ip route print".</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa konfigurasi routing melalui CLI MikroTik dilakukan dengan perintah "/ip route add" untuk menambahkan route statis atau default gateway yang akan mengarahkan lalu lintas jaringan ke tujuan yang benar, dan dapat diperiksa dengan perintah "/ip route print".</p>
+                <div class="code-block">
+                    /ip route add dst-address=0.0.0.0/0 gateway=192.168.88.1
+                    /ip route print
+                </div>
+            </section>
+
+            <section id="section10">
+                <h2>10. KONFIGURASI FIREWALL MELALUI CLI</h2>
+
+                                                                <div class="image-container">
+                    <img src="g:\web\product 07\10.jpeg" alt="Deskripsi gambar" class="responsive-image">
+                    <p class="image-caption">Picture BY Jovian</p>
+                </div>
+
+
+                <p>Dari sumber Nevacloud (2024), konfigurasi firewall melalui CLI MikroTik melibatkan pembuatan aturan (rules) yang menentukan jenis trafik yang diizinkan atau diblokir. Contoh konfigurasi dasar firewall adalah membuat aturan untuk memblokir trafik dari alamat IP tertentu dengan perintah "/ip firewall filter add chain=input src-address=192.168.88.100 action=drop". Ini akan memblokir semua lalu lintas masuk dari IP 192.168.88.100.</p>
+                <p>Dari sumber Labkom.co.id (tanpa tahun), perintah-perintah CLI MikroTik dapat digunakan untuk berbagai konfigurasi termasuk firewall. Mikrotik memiliki fitur Command Line Completion yang memudahkan pengguna dalam mengetikkan perintah-perintah firewall dan konfigurasi lainnya.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa konfigurasi firewall melalui CLI MikroTik memungkinkan pengguna untuk membuat aturan-aturan yang mengontrol lalu lintas jaringan, seperti memblokir trafik dari alamat IP tertentu, dengan memanfaatkan struktur perintah yang logis dan fitur Command Line Completion untuk memudahkan pengetikan.</p>
+                <div class="code-block">
+                    /ip firewall filter add chain=input src-address=192.168.88.100 action=drop
+                </div>
+            </section>
+
+            <section id="section11">
+                <h2>11. PEMANTAUAN JARINGAN MELALUI CLI</h2>
+
+                                                                <div class="image-container">
+                    <img src="g:\web\product 07\11.jpeg" alt="Deskripsi gambar" class="responsive-image">
+                    <p class="image-caption">Picture BY Jovian</p>
+                </div>
+
+                <p>Dari sumber Nevacloud (2024), mengawasi lalu lintas jaringan adalah aspek penting dari manajemen jaringan. MikroTik CLI menyediakan berbagai perintah untuk memonitor aktivitas jaringan secara real-time, seperti "/interface monitor-traffic" yang menampilkan statistik trafik untuk interface tertentu dan dapat digunakan untuk memantau jumlah data yang masuk dan keluar dari sebuah interface. Ada juga "/tool torch" yang memberikan tampilan lebih rinci tentang paket yang melewati interface, termasuk alamat IP sumber dan tujuan, serta port.</p>
+                <p>Dari sumber Biznethome (2025), untuk mengecek koneksi ke internet melalui CLI, pengguna dapat memasukkan perintah "ping 8.8.8.8" di New Terminal. Jika berhasil, akan muncul balasan dari server Google. Pengguna juga dapat masuk ke Log untuk melihat riwayat aktivitas dan error, dan memastikan tidak ada error terkait DHCP, NAT, atau koneksi internet.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa CLI MikroTik menyediakan berbagai perintah untuk pemantauan jaringan, seperti monitor-traffic untuk statistik trafik, torch untuk analisis paket yang lebih detail, ping untuk mengecek konektivitas, dan log untuk melihat riwayat aktivitas dan error.</p>
+                <div class="code-block">
+                    /interface monitor-traffic ether1
+                    ping 8.8.8.8
+                </div>
+            </section>
+
+            <section id="section12">
+                <h2>12. TIPS DAN TRIK MENGGUNAKAN CLI MIKROTIK</h2>
+                <p>Dari sumber Nevacloud (2024), menggunakan CLI secara efisien melibatkan penguasaan pintasan keyboard dan alih aksen. Beberapa tips penggunaan CLI mencakup menggunakan tombol Tab untuk autocompletion, yang akan mengisi otomatis bagian dari perintah yang sedang diketik, menghemat waktu dan mengurangi kesalahan.</p>
+                <p>Dari sumber Citraweb (tanpa tahun), MikroTik menyediakan menu Setup pada Command Line Interface yang dapat digunakan untuk melakukan setting dasar. Untuk mengakses menu ini, bisa dilakukan dengan mengetikkan command "Setup". Ada beberapa konfigurasi dasar yang dapat dilakukan pada menu Setup, seperti DHCP Server & Client, IP Address, Default Gateway, PPPoE Client, PPTP Client, serta reset semua konfigurasi router. Pada saat perintah setup dipanggil, Router berada dalam Safe Mode, artinya konfigurasi yang dilakukan hanya akan disimpan sementara. Jika konfigurasi tersebut menyebabkan Router error, maka safe mode akan menghapus konfigurasi yang dibuat dan mengembalikan Router pada konfigurasi sebelumnya. Untuk menyimpan setting, bisa menggunakan tombol CTRL+X untuk keluar dari menu setup sekaligus melepas (release) Safe Mode Router.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa penggunaan CLI MikroTik dapat dioptimalkan dengan memanfaatkan fitur autocompletion dengan tombol Tab, menggunakan menu Setup untuk konfigurasi dasar, dan memahami fungsi Safe Mode serta penggunaan tombol CTRL+X untuk menyimpan konfigurasi secara permanen.</p>
+                <div class="code-block">
+                    setup
+                </div>
+            </section>
+
+            <section id="section13">
+                <h2>13. KODE CLI PENTING PADA MIKROTIK</h2>
+
+                                                <div class="image-container">
+                    <img src="g:\web\product 07\13.jpeg" alt="Deskripsi gambar" class="responsive-image">
+                    <p class="image-caption">Picture BY Jovian</p>
+                </div>
+
+                <p>Dari sumber Nevacloud (2024), beberapa kode CLI penting yang sering digunakan dalam konfigurasi MikroTik adalah:</p>
+                <div class="code-block">
+                    /interface print
+                </div>
+                <p>Perintah ini digunakan untuk menampilkan semua interface yang ada pada router MikroTik beserta statusnya. Dari sumber yang sama, perintah ini sangat berguna untuk identifikasi awal interface sebelum melakukan konfigurasi lebih lanjut.</p>
+                <p>Dari sumber Tech@Layer-x.com (2025), kode CLI penting berikutnya adalah untuk konfigurasi NAT yang memungkinkan jaringan lokal mengakses internet:</p>
+                <div class="code-block">
+                    /ip firewall nat add chain=srcnat action=masquerade out-interface=ether1
+                </div>
+                <p>Perintah ini akan membuat aturan NAT yang mengizinkan paket dari jaringan lokal untuk keluar melalui interface ether1 (biasanya interface WAN) dengan mengubah alamat sumber menjadi alamat IP publik router.</p>
+                <p>Dari sumber PCNetLabs (2020), untuk mengamankan akses ke router, dapat digunakan perintah berikut untuk mengubah password administrator:</p>
+                <div class="code-block">
+                    /user set admin password=password_baru
+                </div>
+                <p>Perintah ini mengubah password untuk pengguna admin yang merupakan langkah dasar untuk keamanan router.</p>
+                <p>Dari 3 pendapat tersebut dapat disimpulkan bahwa kode-kode CLI penting pada MikroTik mencakup perintah untuk menampilkan interface, konfigurasi NAT untuk akses internet, dan pengubahan password administrator untuk keamanan dasar.</p>
+            </section>
+
+            <section id="section14">
+                <h2>14. KODE CLI UNTUK KONFIGURASI DHCP SERVER</h2>
+                <p>Dari sumber MikroTik Documentation (2025), konfigurasi DHCP server dapat dilakukan dengan perintah berikut:</p>
+                <div class="code-block">
+                    /ip dhcp-server setup
+                </div>
+                <p>Perintah ini akan menjalankan wizard setup DHCP server dengan cara interaktif, dimana pengguna akan diminta untuk memasukkan parameter-parameter seperti interface, network address, gateway, pool address, dan DNS server. Dari sumber yang sama, cara ini merupakan cara termudah untuk menyiapkan DHCP server pada router MikroTik.</p>
+                <p>Dari sumber Biznethome (2025), untuk konfigurasi DHCP server secara manual, dapat menggunakan serangkaian perintah berikut:</p>
+                <div class="code-block">
+                    /ip pool add name=dhcp_pool1 ranges=192.168.88.2-192.168.88.254
+                    /ip dhcp-server add address-pool=dhcp_pool1 interface=ether2 name=dhcp1
+                    /ip dhcp-server network add address=192.168.88.0/24 gateway=192.168.88.1 dns-server=8.8.8.8,8.8.4.4
+                </div>
+                <p>Perintah-perintah di atas akan membuat IP pool untuk DHCP, menambahkan DHCP server pada interface ether2, dan mengkonfigurasi network parameter termasuk gateway dan DNS server.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa konfigurasi DHCP server pada MikroTik dapat dilakukan baik dengan menggunakan wizard setup yang interaktif maupun dengan serangkaian perintah manual yang memungkinkan kontrol lebih detail atas parameter konfigurasi.</p>
+            </section>
+
+            <section id="section15">
+                <h2>15. KODE CLI UNTUK KONFIGURASI FIREWALL</h2>
+
+                                <div class="image-container">
+                    <img src="g:\web\product 07\15.jpeg" alt="Deskripsi gambar" class="responsive-image">
+                    <p class="image-caption">Picture BY Jovian</p>
+                </div>
+
+                <p>Dari sumber Nevacloud (2024), berikut adalah contoh kode CLI untuk konfigurasi firewall dasar pada MikroTik:</p>
+                <div class="code-block">
+                    /ip firewall filter add chain=input protocol=tcp dst-port=22 action=accept comment="Allow SSH"
+                    /ip firewall filter add chain=input connection-state=established,related action=accept comment="Allow Established Connections"
+                    /ip firewall filter add chain=input connection-state=invalid action=drop comment="Drop Invalid Connections"
+                    /ip firewall filter add chain=forward connection-state=established,related action=accept comment="Allow Established Connections"
+                    /ip firewall filter add chain=forward connection-state=invalid action=drop comment="Drop Invalid Connections"
+                    /ip firewall filter add chain=input action=drop comment="Drop everything else"
+                </div>
+                <p>Dari sumber yang sama, rangkaian perintah ini membuat aturan firewall dasar yang mengizinkan koneksi SSH, menerima koneksi yang sudah dibuat sebelumnya, menolak koneksi yang tidak valid, dan menolak semua koneksi masuk lainnya.</p>
+                <p>Dari sumber Tech@Layer-x.com (2025), untuk membatasi akses pada port tertentu, dapat digunakan perintah firewall berikut:</p>
+                <div class="code-block">
+                    /ip firewall filter add chain=input protocol=tcp dst-port=80,443 src-address=192.168.1.0/24 action=accept comment="Allow LAN Web Access"
+                </div>
+                <p>Perintah ini mengizinkan akses HTTP dan HTTPS hanya dari jaringan 192.168.1.0/24 ke router.</p>
+                <p>Dari 2 pendapat tersebut dapat disimpulkan bahwa konfigurasi firewall pada MikroTik melalui CLI memungkinkan pengguna untuk membuat aturan keamanan yang komprehensif untuk mengontrol lalu lintas jaringan, baik untuk melindungi router itu sendiri maupun untuk mengatur akses antar jaringan.</p>
+            </section>
+
+            <section id="section16">
+                <h2>16. KODE CLI UNTUK MONITORING DAN TROUBLESHOOTING</h2>
+
+                <div class="image-container">
+                    <img src="WhatsApp Image 2025-08-18 at 12.18.28.jpeg" alt="Deskripsi gambar" class="responsive-image">
+                    <p class="image-caption">Picture BY Jovian</p>
+                </div>
+
+                <div class="image-container">
+                    <img src="g:\web\product 07\WhatsApp Image 2025-08-18 at 12.18.29.jpeg" alt="Deskripsi gambar" class="responsive-image">
+                    <p class="image-caption">Picture BY Jovian</p>
+                </div>
+
+                <p>Dari sumber Nevacloud (2024), beberapa perintah CLI penting untuk monitoring dan troubleshooting jaringan pada MikroTik adalah:</p>
+                <div class="code-block">
+                    /interface monitor-traffic ether1
+                </div>
+                <p>Perintah ini akan menampilkan statistik traffic secara real-time pada interface ether1, menunjukkan jumlah data yang masuk dan keluar dalam bentuk bit per detik.</p>
+                <p>Dari sumber MikroTik Documentation (2025), untuk melakukan analisis traffic yang lebih detail, dapat digunakan perintah:</p>
+                <div class="code-block">
+                    /tool torch interface=ether1 ip-protocol=tcp port=80 src-address=192.168.1.0/24
+                </div>
+                <p>Perintah ini akan melakukan monitoring packet dengan detail paket yang melewati interface ether1 dengan protokol TCP pada port 80 dari sumber alamat 192.168.1.0/24.</p>
+                <p>Dari sumber Citraweb (tanpa tahun), untuk backup konfigurasi router yang merupakan bagian penting dari manajemen dan troubleshooting, dapat digunakan perintah:</p>
+                <div class="code-block">
+                    /system backup save name=backup-config
+                </div>
+                <p>Perintah ini akan membuat file backup dari konfigurasi router saat ini dengan nama backup-config.</p>
+                <p>Dari 3 pendapat tersebut dapat disimpulkan bahwa CLI MikroTik menyediakan berbagai perintah untuk monitoring dan troubleshooting jaringan, dari pemantauan traffic sederhana hingga analisis packet yang mendalam, serta kemampuan untuk membuat backup konfigurasi untuk pemulihan jika terjadi masalah.</p>
+            </section>
+
+<section class="references">
+    <h2>DAFTAR PUSTAKA</h2>
+    <ul style="list-style-type: none; padding-left: 0;">
+        <li>IDN.ID. (2022). Cara Menggunakan Winbox Terlengkap. https://www.idn.id/tutorial-cara-menggunakan-winbox/. Diakses pada 17 Agustus 2025, pukul 08:30.</li>
+        <li>Biznethome. (2025). Cara Setting MikroTik Dasar dengan Winbox untuk Pemula Tahun 2025. https://biznethome.net/blog/cara-setting-mikrotik-dasar-dengan-winbox-untuk-pemula/. Diakses pada 17 Agustus 2025, pukul 09:20.</li>
+        <li>Citraweb. (tanpa tahun). 10 Tips Cara Menggunakan Winbox Mikrotik. https://citraweb.com/artikel/265/. Diakses pada 17 Agustus 2025, pukul 10:10.</li>
+        <li>Nevacloud. (2024). Menguasai CLI MikroTik: Gerbang Menuju Jaringan Tingkat Lanjut. https://nevacloud.com/blog/panduan-cli-mikrotik/. Diakses pada 17 Agustus 2025, pukul 11:00.</li>
+        <li>Herza Cloud. (2020). Panduan Dasar Mikrotik CLI (Command Line Interface). https://herza.id/blog/panduan-dasar-mikroik-cli/. Diakses pada 17 Agustus 2025, pukul 11:50.</li>
+        <li>Labkom.co.id. (tanpa tahun). Perintah / Command Line Dasar Mikrotik. https://labkom.co.id/mikrotik/perintah-command-line-dasar-mikrotik. Diakses pada 17 Agustus 2025, pukul 12:40.</li>
+        <li>Blues Pedia. (tanpa tahun). Perintah / Command Line Dasar Mikrotik. https://www.blues-pedia.com/2014/02/bpm013.html. Diakses pada 17 Agustus 2025, pukul 13:30.</li>
+        <li>Komputer Jaringan. (tanpa tahun). Perintah Dasar Mikrotik (Command Line). http://nuraisyah2860.blogspot.com/2017/03/perintah-dasar-mikrotik-command-line.html. Diakses pada 17 Agustus 2025, pukul 14:20.</li>
+        <li>PCNetLabs. (2020). Perintah Dasar Mikrotik CLI-Command Line Interface Berikut Penjelasannya. https://pcnetlabs.com/perintah-dasar-mikrotik-cli-berikut-penjelasannya/. Diakses pada 17 Agustus 2025, pukul 15:10.</li>
+        <li>MikroTik Documentation. (2025). DHCP - RouterOS - MikroTik Documentation. https://help.mikrotik.com/docs/spaces/ROS/pages/24805500/DHCP. Diakses pada 17 Agustus 2025, pukul 16:00.</li>
+        <li>Tech@Layer-x.com. (2025). Essential MikroTik Commands Every Network Engineer Should Know. https://tech.layer-x.com/essential-mikrotik-commands-every-network-engineer-should-know/. Diakses pada 17 Agustus 2025, pukul 16:50.</li>
+    </ul>
+</section>
+
+
+            <footer>
+                <p>&copy; 2025 Jovian Ekasakta - SMK Dwija Bhakti 01 Jombang</p>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // Loading screen handling
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadingScreen = document.querySelector('.loading-screen');
+            const mainContent = document.querySelector('.main-content');
+            const progressBar = document.querySelector('.loading-progress-bar');
+            const loadingCounter = document.querySelector('.loading-counter');
+            const loadingDots = document.querySelector('.loading-dots');
+
+            // Loading progress animation
+            let progress = 0;
+            let counter = 5;
+            let dots = 0;
+
+            // Animate loading dots
+            setInterval(() => {
+                dots = (dots % 3) + 1;
+                loadingDots.textContent = '.'.repeat(dots);
+            }, 300);
+
+            // Progress bar animation
+            const progressInterval = setInterval(() => {
+                progress += 1;
+                progressBar.style.width = `${progress}%`;
+            }, 50);
+
+            // Counter animation
+            const counterInterval = setInterval(() => {
+                counter -= 1;
+                loadingCounter.textContent = counter;
+
+                if (counter <= 0) {
+                    clearInterval(counterInterval);
+                    clearInterval(progressInterval);
+
+                    // Hide loading screen and show main content
+                    loadingScreen.style.animation = 'fadeOut 0.5s forwards';
+                    mainContent.style.display = 'block';
+
+                    // Initialize main content animations
+                    createNodes();
+                    revealSections();
+                    typeEffect();
+
+                    // Add visible class to first section
+                    document.querySelector('#section1').classList.add('visible');
+                }
+            }, 1000);
+        });
+
+        // Membuat efek node floating di background
+        function createNodes() {
+            const nodeCount = 30;
+            const container = document.body;
+
+            for (let i = 0; i < nodeCount; i++) {
+                const node = document.createElement('div');
+                node.className = 'node';
+
+                // Posisi random
+                const posX = Math.random() * window.innerWidth;
+                const posY = Math.random() * window.innerHeight;
+
+                // Ukuran random
+                const size = Math.random() * 5 + 2;
+
+                // Animasi random
+                const duration = Math.random() * 30 + 10;
+                const delay = Math.random() * 5;
+
+                node.style.width = `${size}px`;
+                node.style.height = `${size}px`;
+                node.style.left = `${posX}px`;
+                node.style.top = `${posY}px`;
+                node.style.animation = `float ${duration}s ease-in-out ${delay}s infinite`;
+
+                container.appendChild(node);
+
+                // Membuat koneksi antar node jika dekat
+                setTimeout(() => {
+                    moveNode(node);
+                }, 100);
+            }
+        }
+
+        function moveNode(node) {
+            const maxX = window.innerWidth - 10;
+            const maxY = window.innerHeight - 10;
+
+            const moveX = (Math.random() - 0.5) * 2;
+            const moveY = (Math.random() - 0.5) * 2;
+
+            let currentX = parseInt(node.style.left);
+            let currentY = parseInt(node.style.top);
+
+            setInterval(() => {
+                currentX += moveX;
+                currentY += moveY;
+
+                if (currentX > maxX || currentX < 0) currentX = Math.random() * maxX;
+                if (currentY > maxY || currentY < 0) currentY = Math.random() * maxY;
+
+                node.style.left = `${currentX}px`;
+                node.style.top = `${currentY}px`;
+            }, 100);
+        }
+
+        // Animasi reveal saat scroll
+        function revealSections() {
+            const sections = document.querySelectorAll('section');
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, {
+                threshold: 0.1
+            });
+
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+        }
+
+        // Typing effect untuk judul
+        function typeEffect() {
+            const title = document.querySelector('h1');
+            const text = title.textContent;
+            title.textContent = '';
+
+            let i = 0;
+            const typing = setInterval(() => {
+                if (i < text.length) {
+                    title.textContent += text.charAt(i);
+                    i++;
+                } else {
+                    clearInterval(typing);
+                }
+            }, 50);
+        }
+
+        // Handling responsive
+        window.addEventListener('resize', () => {
+            // Hapus semua node yang ada
+            document.querySelectorAll('.node').forEach(node => {
+                node.remove();
+            });
+
+            // Buat ulang dengan ukuran yang sesuai
+            createNodes();
+        });
+    </script>
+</body>
+</html>
